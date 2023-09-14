@@ -1,0 +1,227 @@
+<!-- This is an experimental minigame. It was made to toy with
+a physics system that could be used for the full project. The
+goal of the game is to pilot a rectangular space creature to help
+it collect space food without hitting the game boundaries! -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Project G.Race</title>
+	<script src="js/pixi.min.js"></script>
+	<script>
+		// Dimensions
+		const PLAYER_SIZE = 50
+		const WINDOW_WIDTH = 960
+		const WINDOW_HEIGHT = 540
+
+		// Motion constants
+		const BASE_ACCEL = 0.02
+		const MAX_ACCEL = 0.2
+
+		let app
+		let player
+		let playerPhysics = {
+			velocityX: 0,
+			velocityY: 0,
+			accelX: 0,
+			accelY: 0
+		}
+		let state = {
+			keyStates: {},
+			score: 0
+		}
+		let counter
+
+		window.onload = function() {
+			app = new PIXI.Application(
+				{
+					width: WINDOW_WIDTH,
+					height: WINDOW_HEIGHT,
+					backgroundColor: 0x27293B
+				}
+			)
+			
+			// Set the stage
+			document.body.appendChild(app.view)
+
+			// Initialize player sprite on stage
+			player = new PIXI.Sprite.from("images/player.png")
+			player.anchor.set(0.5)
+
+			// Initialize food on stage
+			food = new PIXI.Sprite.from("images/food.png")
+			food.anchor.set(0.5)
+
+			// Initialize score counter on stage
+			counter = new PIXI.Text(state['score'], {
+				fontFamily: 'Calibri',
+				fontSize: 24,
+				fill: 0xFFFFFF,
+				align: 'center',
+			})
+			counter.anchor.set(0.5)
+			counter.y = 20
+
+			resetGame()
+
+			app.stage.addChild(player)
+			app.stage.addChild(food)
+			app.stage.addChild(counter)
+
+			// Player movement event listeners
+			window.addEventListener("keydown", keysDown)
+			window.addEventListener("keyup", keysUp)
+
+			app.ticker.add(gameLoop)
+		}
+
+		function resetGame() {
+			centerPlayer()
+			placeFood()
+			state['score'] = 0
+			updateScore()
+			
+			playerPhysics = {
+				velocityX: 0,
+				velocityY: 0,
+				accelX: 0,
+				accelY: 0
+			}
+		}
+
+		function centerPlayer() {
+			player.x = WINDOW_WIDTH / 2
+			player.y = WINDOW_HEIGHT / 2
+		}
+
+		function placeFood() {
+			// Randomly places food somewhere on the screen
+			// Food will not be placed within 20px of the boundaries
+			food.y = Math.floor(Math.random() * (WINDOW_HEIGHT - 40)) + 20
+			food.x = Math.floor(Math.random() * (WINDOW_WIDTH - 40)) + 20
+		}
+
+		function updateScore() {
+			counter.text = state['score']
+			counter.x = WINDOW_WIDTH / 2
+		}
+
+		function keysDown(e) {
+			state['keyStates'][e.keyCode] = true
+		}
+
+		function keysUp(e) {
+			state['keyStates'][e.keyCode] = false
+		}
+
+		function gameLoop() {
+			// Updates acceleration values based on event listeners
+			accelerate()
+
+			// Allows the space creature to eat food on contact with it
+			checkFood()
+
+			// Resolves boundary contact case (game ends)
+			checkBoundaries()
+
+			// Update player physics
+			playerPhysics['velocityX'] += playerPhysics['accelX']
+			playerPhysics['velocityY'] += playerPhysics['accelY']
+
+			player.x += playerPhysics['velocityX']
+			player.y += playerPhysics['velocityY']
+		}
+
+		function accelerate() {
+			// MAX_ACCEL was initially being used when pressing WASD
+			// would increment accel instead of using a constant value
+			
+			// It is being left here to make it possible to go back to
+			// that original concept in future experiments
+
+			// Apply forces in response to W and S presses
+			if (state['keyStates']['87'] && player.y > PLAYER_SIZE / 2) {
+				playerPhysics['accelY'] = Math.min(-BASE_ACCEL, MAX_ACCEL)
+			}
+
+			if (state['keyStates']['83'] && player.y < WINDOW_HEIGHT - PLAYER_SIZE / 2) {
+				playerPhysics['accelY'] = Math.min(BASE_ACCEL, MAX_ACCEL)
+			}
+
+			// No force if both released or pressed
+			if (!state['keyStates']['87'] && !state['keyStates']['83']
+					|| state['keyStates']['87'] && state['keyStates']['83']) {
+				playerPhysics['accelY'] = 0
+			}
+			
+			// Apply forces in response to A and D presses
+			if (state['keyStates']['65'] && player.x > PLAYER_SIZE / 2) {
+				playerPhysics['accelX'] = Math.min(-BASE_ACCEL, MAX_ACCEL)
+			}
+
+			if (state['keyStates']['68'] && player.x < WINDOW_WIDTH - PLAYER_SIZE / 2) {
+				playerPhysics['accelX'] = Math.min(BASE_ACCEL, MAX_ACCEL)
+			}
+
+			// No force if both released or pressed
+			if (!state['keyStates']['65'] && !state['keyStates']['68']
+					|| state['keyStates']['65'] && state['keyStates']['68']) {
+				playerPhysics['accelX'] = 0
+			}
+		}
+
+		function checkFood() {
+			if (food.x > player.x - PLAYER_SIZE / 2
+					&& food.x < player.x + PLAYER_SIZE / 2
+					&& food.y > player.y - PLAYER_SIZE / 2
+					&& food.y < player.y + PLAYER_SIZE / 2) {
+				scorePoint()
+			}
+		}
+
+		function scorePoint() {
+			state['score'] += 1
+			placeFood()
+			updateScore()
+		}
+
+		function checkBoundaries() {
+			// Resolve velocity on bounds contact
+			if (player.x <= PLAYER_SIZE / 2
+					|| player.x >= WINDOW_WIDTH - PLAYER_SIZE / 2
+					|| player.y <= PLAYER_SIZE / 2
+					|| player.y >= WINDOW_HEIGHT - PLAYER_SIZE / 2) {
+				
+				// reset game!
+				resetGame()
+			}
+
+			// ARCHIVED MECHANIC (game doesn't end... velocity is simply reset)
+			// if (player.x <= PLAYER_SIZE / 2 && playerPhysics['velocityX'] < 0) {
+			// 	playerPhysics['velocityX'] = 0
+			// 	player.x = PLAYER_SIZE / 2
+			// } else if (player.x >= WINDOW_WIDTH - PLAYER_SIZE / 2 && playerPhysics['velocityX'] > 0) {
+			// 	playerPhysics['velocityX'] = 0
+			// 	player.x = WINDOW_WIDTH - PLAYER_SIZE / 2
+			// } else {
+			// 	playerPhysics['velocityX'] += playerPhysics['accelX']
+			// }
+
+			// if (player.y <= PLAYER_SIZE / 2 && playerPhysics['velocityY'] < 0) {
+			// 	playerPhysics['velocityY'] = 0
+			// 	player.y = PLAYER_SIZE / 2
+			// } else if (player.y >= WINDOW_HEIGHT - PLAYER_SIZE / 2 && playerPhysics['velocityY'] > 0) {
+			// 	playerPhysics['velocityY'] = 0
+			// 	player.y = WINDOW_HEIGHT - PLAYER_SIZE / 2
+			// } else {
+			// 	playerPhysics['velocityY'] += playerPhysics['accelY']
+			// }
+		}
+	</script>
+</head>
+<body>
+
+</body>
+</html>
